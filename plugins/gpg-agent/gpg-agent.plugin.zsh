@@ -1,26 +1,16 @@
-# Based on ssh-agent code
+# Enable gpg-agent if it is not running-
+# --use-standard-socket will work from version 2 upwards
 
-local GPG_ENV=$HOME/.gnupg/gpg-agent.env
+AGENT_SOCK=$(gpgconf --list-dirs | grep agent-socket | cut -d : -f 2)
 
-function start_agent {
-  /usr/bin/env gpg-agent --daemon --enable-ssh-support --write-env-file ${GPG_ENV} > /dev/null
-  chmod 600 ${GPG_ENV}
-  . ${GPG_ENV} > /dev/null
-}
-
-# Source GPG agent settings, if applicable
-if [ -f "${GPG_ENV}" ]; then
-  . ${GPG_ENV} > /dev/null
-  ps -ef | grep ${SSH_AGENT_PID} | grep gpg-agent > /dev/null || {
-    start_agent;
-  }
-else
-  start_agent;
+if [[ ! -S $AGENT_SOCK ]]; then
+  gpg-agent --daemon --use-standard-socket &>/dev/null
 fi
+export GPG_TTY=$TTY
 
-export GPG_AGENT_INFO
-export SSH_AUTH_SOCK
-export SSH_AGENT_PID
-
-GPG_TTY=$(tty)
-export GPG_TTY
+# Set SSH to use gpg-agent if it's enabled
+GNUPGCONFIG="${GNUPGHOME:-"$HOME/.gnupg"}/gpg-agent.conf"
+if [[ -r $GNUPGCONFIG ]] && command grep -q enable-ssh-support "$GNUPGCONFIG"; then
+  export SSH_AUTH_SOCK="$AGENT_SOCK.ssh"
+  unset SSH_AGENT_PID
+fi
